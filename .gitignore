@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+whisper_env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Data files
+ai_server/data/*.json
+ai_server/data/*.index
+ai_server/uploads/*
+!ai_server/uploads/.gitkeep
+
+# Environment
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Node (for frontend)
+node_modules/
+dist/
+build/
+.cache/
+
+# Models cache
+.cache/
+huggingface/

@@ -1,0 +1,26 @@
+# Web Framework
+fastapi
+uvicorn[standard]
+python-multipart
+python-dotenv
+
+# AI Models
+git+https://github.com/m-bain/whisperx.git
+torch
+torchaudio
+sentence-transformers
+faiss-cpu
+faster-whisper
+
+# Database
+tinydb
+
+# HTTP Client
+requests
+
+# Data Processing
+numpy
+pydantic
+
+# Audio Processing (optional, for advanced audio preprocessing)
+# ffmpeg-python

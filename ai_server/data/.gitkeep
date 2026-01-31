@@ -1,0 +1,2 @@
+# Keep this directory for data storage
+# TinyDB and FAISS files will be created here at runtime
