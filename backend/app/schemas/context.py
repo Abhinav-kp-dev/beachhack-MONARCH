@@ -27,6 +27,7 @@ class CustomerContext(BaseModel):
     # Long-term memory
     key_memories: List[str] = Field(default_factory=list)
     relationship_score: float = Field(default=0.0, ge=0.0, le=100.0)
+    unified_summary: Optional[str] = None
 
 
 class ContextUpdateRequest(BaseModel):

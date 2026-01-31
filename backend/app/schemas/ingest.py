@@ -26,7 +26,7 @@ class ConversationResponse(BaseModel):
     content: str
     extracted_context: Dict[str, Any]
     sentiment: str
-    intent: str
+    intent: Dict[str, Any]
     created_at: datetime
     
     class Config:

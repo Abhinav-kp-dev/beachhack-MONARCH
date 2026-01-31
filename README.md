@@ -1,49 +1,90 @@
-# BeachHack Template Repository
+# Monarch: AI-Powered Unified Customer Intelligence
 
-![BeachHack Banner](https://github.com/user-attachments/assets/b46c3336-f9eb-473a-ba76-bcf5c0f29d0d)
+Monarch is a high-performance customer intelligence engine designed to transform multi-channel interactions into a unified, deterministic "source of truth" for customer profiles. It leverages a **Graph-Driven Memory Architecture** to separate LLM-based extraction from state-machine-driven persistence, ensuring data reliability and explainability.
 
-Official starter template repository for **BeachHack** hackathon participants.
+## 🚀 Core Features
+
+- **Deterministic Graph Engine**: Replaces traditional "chat history" with a structured state machine that manages entity updates, conflicts, and historical archiving.
+- **Unified Customer Profile**: Consolidates interactions across channels (Chat, Audio, Web) into a single, queryable MongoDB document.
+- **Incremental Summarization**: Intelligently merges new conversation context with existing summaries without duplication or data loss.
+- **Multi-Turn Entity Persistence**: Tracks preferences over time, automatically archiving old values when requirements shift (e.g., changing from a Sedan to an SUV).
+- **Explainable AI**: Every profile update is traceable back to specific conversation turns and confidence scores.
+
+## 🏗️ Technical Architecture
+
+### System Flow
+```mermaid
+graph TD
+    A[Customer Interaction] --> B[FastAPI Gateway]
+    B --> C[AI Service: LLM Extraction]
+    C --> D[Graph Engine: State Machine]
+    D --> E[Transition Logic: Add/Replace/Archive]
+    E --> F[(MongoDB: Unified Profile)]
+    F --> G[Unified Intelligence API]
+```
+
+### Key Components
+
+1.  **AI Service (`app/services/ai_service.py`)**: Responsible for non-deterministic tasks like Named Entity Extraction (NER), Intent Detection, and Sentiment Analysis.
+2.  **Graph Engine (`app/services/graph_engine.py`)**: The brain of the system. It receives extracted entities and applies deterministic rules to update the "Customer Context" based on confidence levels and confirmation flags.
+3.  **Customer Service (`app/services/customer.py`)**: Manages the persistence layer and ensures the root `preferences` field is perfectly synchronized with the internal graph state.
+4.  **Database (`app/db/mongodb.py`)**: High-performance storage using Motor (async MongoDB) for storing conversations, summaries, and complex nested profiles.
+
+## 🛠️ Tech Stack
+
+- **Backend**: Python 3.13, FastAPI
+- **Database**: MongoDB (NoSQL)
+- **Async Driver**: Motor (Tornado-based)
+- **Validation**: Pydantic v2
+- **Documentation**: Swagger UI, Mermaid.js
+
+## 🏁 Getting Started
+
+### Prerequisites
+- Python 3.11+
+- MongoDB 7.0+
+
+### Installation
+
+1. Clone the repository:
+   ```bash
+   git clone <repository-url>
+   cd monarch/backend
+   ```
+
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. Set up environment variables:
+   Create a `.env` file in the root:
+   ```env
+   MONGODB_URI=mongodb://localhost:27017
+   DATABASE_NAME=monarch_db
+   ```
+
+4. Run the server:
+   ```bash
+   python3 -m uvicorn app.main:app --reload --port 8001
+   ```
+
+## 🔌 API Endpoints
+
+- `POST /conversation`: Ingest multi-turn conversations.
+- `GET /customer/{id}/context`: Retrieve the full unified profile, including history.
+- `GET /health`: System health check.
+
+## 🧪 Verification
+
+Verify the system logic by running the included demo scripts:
+```bash
+# Verify Graph Engine transitions
+python3 demo_graph_engine.py
+
+# Verify end-to-end ingestion and persistence
+bash test_api.sh
+```
 
 ---
-
-## 📌 Instructions
-
-All teams must **fork this repository** at the start of the hackathon and use the forked repository for all development work. Use of personal or pre-existing repositories is not allowed.
-
-You are **not restricted to the track or domain** you submitted your initial idea under. Teams are free to choose **any of the released problem statements**.
-
----
-
-## ⏱️ Important Rules
-
-- All development must begin **after forking** this repository.
-- The problem statements were shared in advance **only for ideation and planning**.
-- **No pre-built or pre-developed solutions** are allowed in any form.
-- Commit history and repository metadata will be actively reviewed.
-- Any violation of these rules may result in **immediate disqualification**.
-
----
-
-## 🛠️ Project Setup
-
-This repository does **not enforce any folder structure or technology stack**.  
-Teams are free to organize their project and choose tools, frameworks, and platforms as required by their solution.
-
----
-
-## 📤 Submission Guidelines
-
-Your forked repository will be considered your final submission.  
-Ensure your repository includes a clear README describing:
-- Selected problem statement
-- Project overview
-- Technical approach
-- Setup instructions
-- Demo links
-- Screenshots
-
----
-
-Good luck, and happy hacking 🚀  
-**– Team BeachHack**
-
+*Developed for the BeachHack Monarch project.*

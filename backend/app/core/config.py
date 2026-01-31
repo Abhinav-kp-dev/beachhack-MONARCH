@@ -9,9 +9,22 @@ class Settings(BaseSettings):
     
     # Database
     DATABASE_URL: str = "sqlite:///./customer_intelligence.db"
+    MONGODB_URI: str = "mongodb://localhost:27017"
+    DATABASE_NAME: str = "customer_intelligence"
     
     # AI Service
     OPENAI_API_KEY: Optional[str] = None
+    LLM_MODEL: str = "gpt-4o-mini"  # Cost-effective for extraction
+    LLM_TEMPERATURE: float = 0.1  # Low for consistency
+    
+    # Graph Engine Confidence Thresholds
+    # Tune these based on your LLM's performance
+    CONFIDENCE_HIGH: float = 0.80   # Auto-accept changes
+    CONFIDENCE_MEDIUM: float = 0.55  # Move to pending review
+    # Anything below MEDIUM is ignored
+    
+    # Feature Flags
+    USE_PRODUCTION_LLM: bool = True  # Set to False to use mock implementations
     
     class Config:
         env_file = ".env"

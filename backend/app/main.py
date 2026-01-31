@@ -25,6 +25,12 @@ app.include_router(ingest.router, tags=["Ingest"])
 app.include_router(context.router, tags=["Context"])
 app.include_router(inventory.router, tags=["Actions"])
 
+from app.db.mongodb import close_mongodb
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    await close_mongodb()
+
 
 @app.get("/health")
 async def health_check():

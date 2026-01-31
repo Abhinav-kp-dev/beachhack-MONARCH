@@ -27,11 +27,16 @@ async def get_customer_context(customer_id: str):
         topics_discussed=context.get("topics_discussed", []),
         sentiment_history=context.get("sentiment_history", []),
         pain_points=context.get("pain_points", []),
-        preferences=context.get("preferences", {}),
+        preferences={
+            k: v.get("value") 
+            for k, v in context.get("context", {}).get("entities", {}).items()
+            if isinstance(v, dict) and v.get("confirmed")
+        },
         pending_issues=context.get("pending_issues", []),
         resolved_issues=context.get("resolved_issues", []),
         key_memories=context.get("key_memories", []),
-        relationship_score=context.get("relationship_score", 0.0)
+        relationship_score=context.get("relationship_score", 0.0),
+        unified_summary=context.get("unified_summary")
     )
 
 

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from typing import Optional
 import base64
 
@@ -94,4 +94,61 @@ async def transcribe_audio_upload(file: UploadFile = File(...), language: str = 
         confidence=result["confidence"],
         duration_seconds=result["duration_seconds"],
         language=result["language"]
+    )
+
+
+@router.post("/conversation/upload", response_model=ConversationResponse)
+async def ingest_conversation_file(
+    customer_id: str = Form(..., description="Unique customer identifier"),
+    channel: str = Form("chat", description="Communication channel"),
+    file: UploadFile = File(...),
+):
+    """
+    Ingest a new customer interaction from an uploaded text file.
+    Extracts context, sentiment, and intent automatically.
+    """
+    if not file.filename.endswith(".txt"):
+        raise HTTPException(
+            status_code=400,
+            detail="Only .txt files are supported for conversation upload"
+        )
+    
+    # Read file content
+    content_bytes = await file.read()
+    try:
+        content = content_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        raise HTTPException(
+            status_code=400,
+            detail="Could not decode file content. Please ensure it is a valid UTF-8 text file."
+        )
+    
+    # Extract context using AI
+    extracted_context = await ai_service.extract_context(content)
+    sentiment = await ai_service.analyze_sentiment(content)
+    intent = await ai_service.detect_intent(content)
+    
+    # Store conversation
+    conversation_data = {
+        "customer_id": customer_id,
+        "channel": channel,
+        "content": content,
+        "agent_id": None,
+        "extracted_context": extracted_context,
+        "sentiment": sentiment,
+        "intent": intent,
+        "metadata": {"filename": file.filename}
+    }
+    
+    stored_conversation = await customer_service.add_conversation(conversation_data)
+    
+    return ConversationResponse(
+        id=stored_conversation["id"],
+        customer_id=stored_conversation["customer_id"],
+        channel=channel,
+        content=stored_conversation["content"],
+        extracted_context=extracted_context,
+        sentiment=sentiment,
+        intent=intent,
+        created_at=stored_conversation["created_at"]
     )
