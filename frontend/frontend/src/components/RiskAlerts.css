@@ -1,0 +1,137 @@
+.risk-alerts-widget {
+    margin-bottom: 24px;
+}
+
+.risk-alerts-widget h3 {
+    margin: 0 0 16px 0;
+    font-size: 20px;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.alerts-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.risk-alert {
+    display: flex;
+    gap: 16px;
+    padding: 16px;
+    border-radius: 12px;
+    border-left: 4px solid;
+    background: white;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.risk-alert:hover {
+    transform: translateX(4px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.risk-alert.alert-high {
+    border-left-color: #ef4444;
+    background: linear-gradient(to right, #fef2f2 0%, white 100%);
+}
+
+.risk-alert.alert-medium {
+    border-left-color: #f59e0b;
+    background: linear-gradient(to right, #fffbeb 0%, white 100%);
+}
+
+.risk-alert.alert-low {
+    border-left-color: #3b82f6;
+    background: linear-gradient(to right, #eff6ff 0%, white 100%);
+}
+
+.alert-icon {
+    font-size: 24px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.alert-content {
+    flex: 1;
+}
+
+.alert-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    gap: 12px;
+}
+
+.alert-type {
+    font-size: 12px;
+    font-weight: 700;
+    color: #6b7280;
+    letter-spacing: 0.5px;
+}
+
+.severity-badge {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 700;
+    color: white;
+    letter-spacing: 0.3px;
+}
+
+.severity-badge.high {
+    background: #ef4444;
+}
+
+.severity-badge.medium {
+    background: #f59e0b;
+}
+
+.severity-badge.low {
+    background: #3b82f6;
+}
+
+.alert-message {
+    margin: 0 0 12px 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: #1f2937;
+    line-height: 1.4;
+}
+
+.alert-action {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.03);
+    border-radius: 8px;
+}
+
+.action-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+}
+
+.action-text {
+    font-size: 14px;
+    color: #374151;
+    font-weight: 500;
+}
+
+@media (max-width: 768px) {
+    .risk-alert {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .alert-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}

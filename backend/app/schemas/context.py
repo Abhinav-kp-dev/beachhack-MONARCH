@@ -28,6 +28,17 @@ class CustomerContext(BaseModel):
     key_memories: List[str] = Field(default_factory=list)
     relationship_score: float = Field(default=0.0, ge=0.0, le=100.0)
     unified_summary: Optional[str] = None
+    
+    # Insights & Actions
+    suggested_questions: List[str] = Field(default_factory=list)
+    recommendations: List[Dict[str, Any]] = Field(default_factory=list)
+    
+    # Premium Features
+    health_score: float = Field(default=50.0, ge=0.0, le=100.0, description="Customer health score 0-100")
+    health_status: str = Field(default="unknown", description="healthy, at_risk, critical, or unknown")
+    next_best_action: Optional[Dict[str, Any]] = Field(default=None, description="AI-recommended next action")
+    risk_alerts: List[Dict[str, Any]] = Field(default_factory=list, description="Active risk alerts")
+    commitment_status: Optional[Dict[str, Any]] = Field(default=None, description="Commitment tracking stats")
 
 
 class ContextUpdateRequest(BaseModel):

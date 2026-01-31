@@ -47,6 +47,7 @@ Extract the following with confidence scores (0.0-1.0):
 2. Entities (order IDs, product names, dates, amounts, budget, timeline, etc.)
 3. Action items
 4. Questions asked
+5. Preferences (user constraints, requirements, specific needs)
 
 Return JSON in this format:
 {{
@@ -56,6 +57,9 @@ Return JSON in this format:
   "entities": {{
     "entity_key": {{"value": "entity_value", "confidence": 0.0}}
   }},
+  "preferences": [
+    {{"category": "category_name", "value": "preference_value", "confidence": 0.0}}
+  ],
   "action_items": ["item1", "item2"],
   "questions": ["question1", "question2"]
 }}

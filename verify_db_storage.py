@@ -9,11 +9,12 @@ MONGO_URI = "mongodb://localhost:27017"
 DB_NAME = "customer_intelligence"
 
 async def verify_storage():
+    # 1. Check for ID in command line arguments
+    customer_id = sys.argv[1] if len(sys.argv) > 1 else "edu_learner_001"
+    
     print(f"Connecting to {MONGO_URI}...")
     client = AsyncIOMotorClient(MONGO_URI)
     db = client[DB_NAME]
-    
-    customer_id = "car_buyer_complex_002"
     print(f"Querying for customer_id: {customer_id}")
     
     customer = await db.customers.find_one({"customer_id": customer_id})

@@ -1,0 +1,83 @@
+.health-score-widget {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 16px;
+    padding: 24px;
+    color: white;
+    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+    min-width: 280px;
+}
+
+.health-score-widget h3 {
+    margin: 0 0 20px 0;
+    font-size: 18px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.health-score-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+}
+
+.health-gauge {
+    position: relative;
+    width: 120px;
+    height: 120px;
+}
+
+.health-score-value {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+}
+
+.score-number {
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.score-label {
+    font-size: 14px;
+    opacity: 0.9;
+    margin-top: 4px;
+}
+
+.health-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.status-emoji {
+    font-size: 24px;
+}
+
+.status-text {
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-text.healthy {
+    color: #d1fae5;
+}
+
+.status-text.at_risk {
+    color: #fef3c7;
+}
+
+.status-text.critical {
+    color: #fee2e2;
+}
+
+@media (max-width: 768px) {
+    .health-score-widget {
+        min-width: 100%;
+    }
+}

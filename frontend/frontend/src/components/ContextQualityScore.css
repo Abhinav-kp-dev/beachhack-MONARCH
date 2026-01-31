@@ -1,0 +1,110 @@
+/* Context Quality Score Widget Styles */
+
+.context-quality-widget {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 15px;
+  padding: 25px;
+  color: white;
+  margin-bottom: 20px;
+}
+
+.context-quality-widget h3 {
+  margin: 0 0 20px 0;
+  font-size: 1.5em;
+  text-align: center;
+}
+
+.circular-progress {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  margin: 0 auto 25px;
+}
+
+.progress-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+.progress-percentage {
+  font-size: 1.8em;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.progress-label {
+  font-size: 0.75em;
+  margin-top: 4px;
+  opacity: 0.9;
+}
+
+.quality-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.breakdown-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 12px;
+  border-radius: 10px;
+}
+
+.breakdown-icon {
+  font-size: 1.5em;
+}
+
+.breakdown-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.breakdown-label {
+  font-weight: 600;
+  font-size: 0.95em;
+  margin-bottom: 3px;
+}
+
+.breakdown-value {
+  font-size: 0.85em;
+  opacity: 0.9;
+}
+
+.breakdown-bar {
+  flex: 0 0 80px;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.breakdown-progress {
+  height: 100%;
+  transition: width 0.5s ease;
+  border-radius: 4px;
+}
+
+.quality-score-total {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  text-align: center;
+  font-size: 1.1em;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .breakdown-bar {
+    flex: 0 0 60px;
+  }
+  
+  .breakdown-value {
+    font-size: 0.8em;
+  }
+}

@@ -1,79 +1,47 @@
+Customer (Message):
+Hi, this is regarding the engagement photography we discussed a few days ago. I went through the details you shared on WhatsApp.
 
-customer_id
-"car_buyer_complex_002"
+Agent:
+Hello! Yes, I remember. Thanks for getting back. Let me know if you have any questions or changes in mind.
 
-Agent: Hello, thank you for calling AutoDrive Motors. This is Neha speaking. How can I help you today?
+Customer:
+So, after discussing with my family, we feel the standard package might be sufficient. But we’re still unsure about the video add-on.
 
-Customer: Hi Neha. I wanted to revisit our earlier discussions. I’ve been thinking a lot over the weekend, and a few things have changed for me.
+Agent:
+That’s understandable. Many clients finalize photography first and decide on video later. Is it mainly a budget concern or preference?
 
-Agent: Of course. Let’s go through them one by one.
+Customer:
+Mostly budget. We’re trying to keep the total under ₹15,000 if possible.
 
-Customer: First of all, I don’t think I want to wait 6–8 months anymore. If I find the right option, I may actually buy within the next 1–2 months.
+Agent:
+Got it. In that case, we can stick to the ₹12,000 standard photography package and add a very basic highlights clip for an additional ₹2,500 instead of the full video package.
 
-Agent: Understood. So your purchase timeline has shortened significantly.
+Customer:
+That sounds more reasonable. What would that video include?
 
-Customer: Yes. Also, I don’t think hybrid makes sense for me anymore. After speaking to a few friends, I feel the premium isn’t really worth it for my usage.
+Agent:
+It would be a simple 2–3 minute highlights clip—key moments, light background music, no heavy cinematic effects.
 
-Agent: Okay, so hybrid is no longer preferred?
+Customer:
+Okay, that should work. Also, our event timing has slightly changed. It might start an hour later than we initially discussed.
 
-Customer: Correct. I want to stick to petrol only now.
+Agent:
+That’s not an issue at all, as long as the total coverage stays within the agreed hours. We’ll adjust accordingly.
 
-Agent: Noted.
+Customer:
+Good to know. If everything goes as planned, I think we’ll go ahead with this option.
 
-Customer: Another thing — earlier I was very particular about automatic transmission, but now I’m open to manual again. My knee issue has improved, and manual cars are much cheaper.
+Agent:
+Perfect. Whenever you’re ready, I can block the date with the ₹3,000 advance and share the confirmation details.
 
-Agent: That’s a significant change. I’ll note that automatic is no longer mandatory.
+Customer:
+I’ll make the advance payment by tomorrow evening.
 
-Customer: Yes. And about the budget — I need to be stricter now. I don’t want to cross 9 lakhs under any circumstances.
+Agent:
+Sounds good. Once the payment is done, I’ll send you the booking confirmation and next steps.
 
-Agent: So 9 lakhs is now a firm upper limit?
+Customer:
+Great. Thanks for being flexible—it really helped us decide.
 
-Customer: Absolutely firm. No stretching anymore.
-
-Agent: Got it.
-
-Customer: I’m also no longer fixated on Japanese brands. Reliability still matters, but I’m open to other manufacturers as well if service is decent.
-
-Agent: Okay, so brand preference is now flexible.
-
-Customer: Yes. In fact, my main priority right now is low upfront cost rather than long-term ownership. I don’t think I’ll keep the car for 8–10 years like I initially said. Maybe 4 or 5 years at most.
-
-Agent: Understood. Ownership horizon reduced.
-
-Customer: Also, safety is still important, but I don’t need to over-optimize. Standard safety features are fine; I don’t want to pay extra for top variants.
-
-Agent: Noted.
-
-Customer: One more thing — earlier city driving was my main use, but my job situation has changed. I may relocate, and highway driving could become more frequent.
-
-Agent: Thanks for sharing that. That definitely impacts recommendations.
-
-Customer: Yes. Because of all this, I don’t think a callback is needed anymore. I’d rather shortlist a few options myself and maybe walk into the showroom directly next month.
-
-Agent: Alright. So you don’t want us to schedule a callback at this point?
-
-Customer: Correct. No callback for now. If I need help later, I’ll reach out again.
-
-Agent: Understood. I’ll update this accordingly. Just to confirm, you’re now looking for:
-
-a petrol car
-
-manual or automatic both acceptable
-
-budget capped at 9 lakhs
-
-open brand choice (not limited to Toyota or Honda)
-
-shorter ownership period
-
-and a possible purchase in 1–2 months
-
-Is that correct?
-
-Customer: Yes, that sums it up perfectly.
-
-Agent: Thank you for clarifying everything. We’ll keep this updated in our system. Feel free to reach out whenever you need assistance.
-
-Customer: Sure. Thanks.
-
-Agent: Thank you for calling AutoDrive Motors. Have a great day.
+Agent:
+You’re welcome. Happy to help. Looking forward to covering your event.

@@ -14,8 +14,10 @@ class Settings(BaseSettings):
     
     # AI Service
     OPENAI_API_KEY: Optional[str] = None
-    LLM_MODEL: str = "gpt-4o-mini"  # Cost-effective for extraction
-    LLM_TEMPERATURE: float = 0.1  # Low for consistency
+    LLM_MODEL: str = "gpt-4o-mini"
+    LLM_TEMPERATURE: float = 0.1
+    EXTERNAL_LLM_API_URL: str = "http://192.168.220.76:8000/conversation"
+    EXTERNAL_SUMMARY_API_URL: str = "http://192.168.220.76:8000/summary"
     
     # Graph Engine Confidence Thresholds
     # Tune these based on your LLM's performance
@@ -24,7 +26,7 @@ class Settings(BaseSettings):
     # Anything below MEDIUM is ignored
     
     # Feature Flags
-    USE_PRODUCTION_LLM: bool = True  # Set to False to use mock implementations
+    USE_PRODUCTION_LLM: bool = True
     
     class Config:
         env_file = ".env"

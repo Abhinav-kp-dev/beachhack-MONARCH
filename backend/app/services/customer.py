@@ -14,6 +14,15 @@ class CustomerService:
             customer["_id"] = str(customer["_id"])
         return customer
     
+    async def list_customers(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """List all customers"""
+        db = await get_mongodb()
+        cursor = db.customers.find({}).limit(limit)
+        customers = await cursor.to_list(length=limit)
+        for customer in customers:
+            customer["_id"] = str(customer["_id"])
+        return customers
+    
     async def create_or_update_customer(self, customer_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """Create or update customer"""
         db = await get_mongodb()
@@ -37,7 +46,14 @@ class CustomerService:
                 "topics_discussed": [],
                 "sentiment_history": [],
                 "pain_points": [],
-                "preferences": {},
+                "pain_points": [],
+                "preferences": {}, # Legacy
+                "profile": {  # NEW: Unified Profile Structure
+                    "version": "1.0",
+                    "attributes": {},
+                    "segments": [],
+                    "last_updated": datetime.utcnow().isoformat()
+                },
                 "pending_issues": [],
                 "resolved_issues": [],
                 "key_memories": [],
@@ -184,12 +200,17 @@ class CustomerService:
             existing_summary = customer.get("unified_summary", "")
             pending_issues = customer.get("pending_issues", [])
             
-            updated_summary = await ai_service.update_unified_summary(
+            ai_data = await ai_service.update_unified_summary(
                 existing_summary=existing_summary,
                 new_interaction_summary=interaction_summary,
                 final_backend_state=final_state,
                 pending_issues=pending_issues
             )
+            
+            # Extract fields from result logic
+            updated_summary = ai_data.get("summary", "")
+            suggested_questions = ai_data.get("questions", [])
+            recommendations = ai_data.get("recommendations", [])
             
             # 7. Prepare history entries with transition logs
             interaction_record = {
@@ -211,7 +232,12 @@ class CustomerService:
             await db.customers.update_one(
                 {"customer_id": customer_id},
                 {
-                    "$set": {"unified_summary": updated_summary},
+                    "$set": {
+                        "unified_summary": updated_summary,
+                        "suggested_questions": suggested_questions,
+                        "recommendations": recommendations,
+                        "updated_at": datetime.utcnow()
+                    },
                     "$push": {
                         "interaction_history": interaction_record,
                         "conversation_summaries": conversation_summary_record
@@ -269,6 +295,14 @@ class CustomerService:
                     
                     # Check if confirmed
                     if isinstance(value, dict) and value.get("confirmed"):
+                        # Write to NEW Unified Profile
+                        preferences_updates[f"profile.attributes.{entity_name}"] = {
+                            "value": value.get("value"),
+                            "confidence": value.get("confidence", 1.0),
+                            "source": "graph_inference",
+                            "updated_at": datetime.utcnow().isoformat()
+                        }
+                        # Keep legacy preferences sync for now
                         preferences_updates[f"preferences.{entity_name}"] = value.get("value")
             
             # Merge into main update
@@ -276,6 +310,8 @@ class CustomerService:
                 if "$set" not in update_ops:
                     update_ops["$set"] = {}
                 update_ops["$set"].update(preferences_updates)
+                # Update profile timestamp
+                update_ops["$set"]["profile.last_updated"] = datetime.utcnow().isoformat()
 
             await db.customers.update_one(
                 {"customer_id": customer_id},
@@ -391,5 +427,267 @@ class CustomerService:
             {"$push": {"key_memories": memory}, "$set": {"updated_at": datetime.utcnow()}}
         )
         return await self.get_customer(customer_id)
+    
+    # ===== PREMIUM FEATURES =====
+    
+    def calculate_health_score(self, customer: Dict[str, Any]) -> tuple[float, str]:
+        """
+        Calculate customer health score (0-100) based on multiple factors.
+        Returns: (score, status)
+        """
+        score = 50.0  # Base score
+        
+        # Factor 1: Sentiment trend (40 points)
+        sentiment_history = customer.get("sentiment_history", [])
+        if sentiment_history:
+            recent_sentiments = sentiment_history[-5:]  # Last 5 interactions
+            # Convert sentiment to float (may be stored as string)
+            sentiment_values = []
+            for s in recent_sentiments:
+                sent = s.get("sentiment", 0)
+                try:
+                    sentiment_values.append(float(sent) if sent else 0.0)
+                except (ValueError, TypeError):
+                    sentiment_values.append(0.0)
+            
+            if sentiment_values:
+                avg_sentiment = sum(sentiment_values) / len(sentiment_values)
+                # Convert -1 to +1 range to 0-40 points
+                sentiment_score = (avg_sentiment + 1) * 20
+                score += sentiment_score - 20  # Adjust from base
+        
+        # Factor 2: Issue resolution rate (30 points)
+        pending_issues = customer.get("pending_issues", [])
+        resolved_issues = customer.get("resolved_issues", [])
+        total_issues = len(pending_issues) + len(resolved_issues)
+        if total_issues > 0:
+            resolution_rate = len(resolved_issues) / total_issues
+            score += (resolution_rate * 30) - 15  # Adjust from base
+        
+        # Factor 3: Engagement frequency (20 points)
+        total_interactions = customer.get("total_interactions", 0)
+        if total_interactions > 10:
+            score += 10
+        elif total_interactions > 5:
+            score += 5
+        
+        # Factor 4: Commitment fulfillment (10 points)
+        commitments = customer.get("commitments", [])
+        if commitments:
+            fulfilled = sum(1 for c in commitments if c.get("status") == "completed")
+            if len(commitments) > 0:
+                fulfillment_rate = fulfilled / len(commitments)
+                score += fulfillment_rate * 10
+        
+        # Clamp score to 0-100
+        score = max(0, min(100, score))
+        
+        # Determine status
+        if score >= 80:
+            status = "healthy"
+        elif score >= 50:
+            status = "at_risk"
+        else:
+            status = "critical"
+        
+        return score, status
+    
+    def detect_risk_alerts(self, customer: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Detect and return risk alerts for the customer"""
+        alerts = []
+        
+        # Alert 1: Unresolved issues
+        pending_issues = customer.get("pending_issues", [])
+        if len(pending_issues) >= 3:
+            alerts.append({
+                "type": "unresolved_issues",
+                "severity": "high",
+                "message": f"{len(pending_issues)} unresolved issues - High churn risk",
+                "action": "Prioritize issue resolution"
+            })
+        elif len(pending_issues) >= 1:
+            alerts.append({
+                "type": "unresolved_issues",
+                "severity": "medium",
+                "message": f"{len(pending_issues)} pending issue(s)",
+                "action": "Follow up on open issues"
+            })
+        
+        # Alert 2: Negative sentiment trend
+        sentiment_history = customer.get("sentiment_history", [])
+        if len(sentiment_history) >= 3:
+            recent = sentiment_history[-3:]
+            # Convert sentiment to float (may be stored as string)
+            sentiment_values = []
+            for s in recent:
+                sent = s.get("sentiment", 0)
+                try:
+                    sentiment_values.append(float(sent) if sent else 0.0)
+                except (ValueError, TypeError):
+                    sentiment_values.append(0.0)
+            
+            if sentiment_values:
+                avg_recent = sum(sentiment_values) / len(sentiment_values)
+                if avg_recent < -0.3:
+                    alerts.append({
+                        "type": "negative_sentiment",
+                        "severity": "high",
+                        "message": "Customer sentiment trending negative",
+                        "action": "Immediate outreach recommended"
+                    })
+        
+        # Alert 3: Inactivity
+        last_interaction = customer.get("last_interaction")
+        if last_interaction:
+            if isinstance(last_interaction, str):
+                last_interaction = datetime.fromisoformat(last_interaction.replace('Z', '+00:00'))
+            days_since = (datetime.utcnow() - last_interaction).days
+            if days_since > 30:
+                alerts.append({
+                    "type": "inactivity",
+                    "severity": "medium",
+                    "message": f"No interaction in {days_since} days",
+                    "action": "Re-engagement campaign needed"
+                })
+        
+        # Alert 4: Overdue commitments
+        commitments = customer.get("commitments", [])
+        overdue = [c for c in commitments if c.get("status") == "overdue"]
+        if overdue:
+            alerts.append({
+                "type": "overdue_commitments",
+                "severity": "high",
+                "message": f"{len(overdue)} overdue commitment(s)",
+                "action": "Fulfill promises immediately"
+            })
+            
+        # Alert 5: Escalation/Redirection Need
+        # Check for specialized "service" requests or chronic issues
+        profile = customer.get("profile", {})
+        attributes = profile.get("attributes", {})
+        customer_tier = attributes.get("tier", "").lower()
+        topics = [t.lower() for t in customer.get("topics_discussed", [])]
+        
+        # Detect if it's a message specifically for a specialized "service"
+        if "service" in topics or "escort" in topics or "maintenance" in topics:
+            alerts.append({
+                "type": "service_request",
+                "severity": "medium",
+                "message": "Specific service request detected",
+                "action": "Redirect to Service Specialist"
+            })
+        
+        if customer_tier in ["vip", "enterprise", "service"]:
+            alerts.append({
+                "type": "priority_redirection",
+                "severity": "medium",
+                "message": f"High-priority {customer_tier.upper()} account detected",
+                "action": "Redirect to Senior Account Manager"
+            })
+        elif len(pending_issues) >= 5:
+            alerts.append({
+                "type": "chronic_escalation",
+                "severity": "high",
+                "message": "Chronic unresolved issues detected",
+                "action": "Escalate to Department Head"
+            })
+        
+        return alerts
+    
+    def analyze_commitments(self, customer: Dict[str, Any]) -> Dict[str, Any]:
+        """Analyze commitment status and return tracking stats"""
+        commitments = customer.get("commitments", [])
+        
+        if not commitments:
+            return {
+                "total": 0,
+                "completed": 0,
+                "pending": 0,
+                "overdue": 0,
+                "fulfillment_rate": 0.0
+            }
+        
+        completed = sum(1 for c in commitments if c.get("status") == "completed")
+        pending = sum(1 for c in commitments if c.get("status") == "pending")
+        overdue = sum(1 for c in commitments if c.get("status") == "overdue")
+        
+        fulfillment_rate = (completed / len(commitments)) * 100 if commitments else 0.0
+        
+        return {
+            "total": len(commitments),
+            "completed": completed,
+            "pending": pending,
+            "overdue": overdue,
+            "fulfillment_rate": round(fulfillment_rate, 1),
+            "details": commitments[:5]  # Return first 5 for display
+        }
+    
+    def generate_next_best_action(self, customer: Dict[str, Any], risk_alerts: List[Dict]) -> Dict[str, Any]:
+        """Generate AI-recommended next best action with support for redirections"""
+        
+        # Priority 0: Redirection/Escalation Needs
+        redirection_types = ["service_request", "priority_redirection", "specialized_redirection", "chronic_escalation"]
+        redirection_alerts = [a for a in risk_alerts if a.get("type") in redirection_types]
+        
+        if redirection_alerts:
+            alert = redirection_alerts[0]
+            return {
+                "action": alert.get("action"),
+                "reasoning": f"Specialized handling required: {alert.get('message')}",
+                "confidence": 0.98,
+                "priority": "urgent" if alert.get("severity") == "high" else "high",
+                "category": "redirection"
+            }
+
+        # Priority 1: Critical risks
+        critical_alerts = [a for a in risk_alerts if a.get("severity") == "high"]
+        if critical_alerts:
+            alert = critical_alerts[0]
+            return {
+                "action": alert.get("action"),
+                "reasoning": alert.get("message"),
+                "confidence": 0.95,
+                "priority": "urgent",
+                "category": "risk_mitigation"
+            }
+        
+        # Priority 2: Pending issues
+        pending_issues = customer.get("pending_issues", [])
+        if pending_issues:
+            return {
+                "action": f"Resolve issue: {pending_issues[0].get('description', 'Pending issue')}",
+                "reasoning": "Customer has open issues requiring attention",
+                "confidence": 0.85,
+                "priority": "high",
+                "category": "support"
+            }
+        
+        # Priority 3: Engagement opportunity
+        sentiment_history = customer.get("sentiment_history", [])
+        if sentiment_history:
+            raw_sentiment = sentiment_history[-1].get("sentiment", 0)
+            try:
+                recent_sentiment = float(raw_sentiment)
+            except (ValueError, TypeError):
+                recent_sentiment = 0.0
+                
+            if recent_sentiment > 0.5:
+                return {
+                    "action": "Explore upsell opportunities",
+                    "reasoning": "Customer sentiment is positive - good time for expansion discussion",
+                    "confidence": 0.70,
+                    "priority": "medium",
+                    "category": "sales"
+                }
+        
+        # Default: Maintain relationship
+        return {
+            "action": "Schedule check-in call",
+            "reasoning": "Maintain regular engagement to strengthen relationship",
+            "confidence": 0.60,
+            "priority": "low",
+            "category": "engagement"
+        }
 
 customer_service = CustomerService()
+

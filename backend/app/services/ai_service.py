@@ -1,20 +1,153 @@
 from typing import Dict, Any, Optional
 import json
+import httpx
+from app.core.config import settings
+from app.core.logging import logger
 
 
 class AIService:
-    """AI Service for context extraction and analysis"""
+    """AI Service for context extraction and analysis using external LLM API"""
     
     def __init__(self):
-        pass
+        self.api_url = settings.EXTERNAL_LLM_API_URL
+        self.summary_url = settings.EXTERNAL_SUMMARY_API_URL
+        self.use_real_llm = settings.USE_PRODUCTION_LLM
+
+    async def _call_llm_api(self, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Helper to call external LLM API"""
+        if not self.use_real_llm:
+            return None
+            
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                logger.info(f"Calling external LLM API at {self.api_url}")
+                response = await client.post(self.api_url, json=payload)
+                if response.status_code == 200:
+                    return response.json()
+                else:
+                    logger.error(f"LLM API Error: {response.status_code} - {response.text}")
+                    return None
+        except Exception as e:
+            logger.error(f"Failed to call LLM API: {str(e)}", exc_info=True)
+            return None
+
+    async def _call_summary_api(self, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Helper to call dedicated external Summary API"""
+        if not self.use_real_llm:
+            return None
+            
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                logger.info(f"Calling external Summary API at {self.summary_url}")
+                # The dedicated summary API might expect a simpler payload or same as conversation
+                response = await client.post(self.summary_url, json=payload)
+                if response.status_code == 200:
+                    return response.json()
+                else:
+                    logger.warning(f"Summary API returned {response.status_code} - falling back to conversation API")
+                    return await self._call_llm_api(payload)
+        except Exception as e:
+            logger.error(f"Failed to call Summary API: {str(e)}")
+            return await self._call_llm_api(payload)
     
     async def extract_context(self, content: str) -> Dict[str, Any]:
         """Extract structured context from conversation content"""
-        # Mock implementation - replace with actual AI model
-        # Using fixed mock confidence for testing
+        # Clean content for LLM - remove internal headers
+        cleaned_content = content
+        if "customer_id" in content and "\n" in content:
+            # Strip first few lines if they look like headers
+            lines = content.splitlines()
+            if len(lines) > 2 and "customer_id" in lines[0].lower():
+                cleaned_content = "\n".join(lines[3:]) # Skip ID and blank lines
         
+        if self.use_real_llm:
+            # Prepend strong context instruction to override external model bias
+            system_instruction = "Context: General Inquiry. Extract valid user preferences into generic keys. Do NOT force data into automotive fields. Do NOT use keys: 'vehicle_type', 'fuel_type', 'car_color', 'mileage', 'seating_capacity', 'transmission', 'variant'. Use keys like 'timeline', 'budget', 'preference' instead.\n\n"
+            
+            payload = {
+                "customer_id": "extraction_only",
+                "channel": "internal",
+                "text": system_instruction + cleaned_content
+            }
+            api_response = await self._call_llm_api(payload)
+            
+            if api_response and "extracted_context" in api_response:
+                ext = api_response["extracted_context"]
+                logger.info(f"[RAW LLM RESPONSE] {json.dumps(ext)}")
+                logger.info("Successfully received context from real LLM API, mapping fields...")
+                
+                # TRANSFORMATION LAYER: Map their schema to ours
+                
+                # Sanitize context to remove hallucinations
+                # Pass original content for context verification
+                ext = self._sanitize_context(ext, content)
+                
+                topics = {}
+                entities = {}
+                action_items = []
+                
+                # 1. Map preferences -> entities
+                # Generic mapping: Map all extracted preferences to entities directly
+                for pref in ext.get("preferences", []):
+                    cat = pref.get("category")
+                    val = pref.get("value")
+                    confidence = pref.get("confidence", 0.9)
+                    
+                    if cat and val:
+                        # Fix for our internal naming if necessary
+                        if cat == "budget": cat = "budget_initial"
+                        
+                        entities[cat] = {
+                            "value": val,
+                            "confidence": confidence
+                        }
+                
+                # 2. Map commitments -> entities (Generic)
+                # Map any commitment to an entity if it looks useful
+                for comm in ext.get("commitments", []):
+                    if isinstance(comm, dict):
+                        key = comm.get("category", "commitment")
+                        val = comm.get("value")
+                        if val:
+                            entities[key] = {"value": val, "confidence": 0.9}
+                    elif isinstance(comm, str):
+                        # If it's just a string, we can't easily categorize it without NLP, 
+                        # so we append it to action items or a generic 'commitments' list
+                        # For now, let's treat it as an action item if it's actionable
+                        action_items.append(comm)
+                
+                # 3. Map issues -> action_items
+                for issue in ext.get("issues", []):
+                    if isinstance(issue, dict):
+                        action_items.append(issue.get("value", str(issue)))
+                    else:
+                        action_items.append(str(issue))
+                
+                # 4. Handle signals (sentiment/intent)
+                signals = ext.get("signals", {})
+                if signals.get("intent"):
+                    topics[signals["intent"]] = {"value": signals["intent"], "confidence": 0.9}
+
+                return {
+                    "topics": topics,
+                    "entities": entities,
+                    "action_items": action_items,
+                    "questions": self._extract_questions(content) # Keep local regex for now
+                }
+            
+            # If we are here, use_real_llm is True but API failed or returned invalid data
+            logger.error("Real LLM API failed to return valid context. Strict mode enabled: NOT using mocks.")
+            # Return empty structure rather than mock data to avoid confusion
+            return {
+                "topics": {},
+                "entities": {},
+                "action_items": [],
+                "questions": []
+            }
+                
+        # Only use mock if explicitly configured to NOT use real LLM
+        logger.warning("Real LLM disabled. Using mock implementation.")
         topics = self._extract_topics(content)
-        # Mock confidence: 0.85 (High) for technical, 0.65 (Medium) for general
         topic_data = {
             t: {"value": t, "confidence": 0.85 if t == "technical" else 0.65}
             for t in topics
@@ -29,7 +162,29 @@ class AIService:
     
     async def analyze_sentiment(self, content: str) -> str:
         """Analyze sentiment of the content"""
-        # Mock implementation
+        # Simple cleaning
+        cleaned_content = content
+        if "customer_id" in content and len(content.splitlines()) > 3:
+             cleaned_content = "\n".join(content.splitlines()[3:])
+
+        if self.use_real_llm:
+            payload = {
+                "customer_id": "analysis_only",
+                "channel": "internal",
+                "text": cleaned_content, 
+                "task": "sentiment"
+            }
+            api_response = await self._call_llm_api(payload)
+            if api_response:
+                # Try to find sentiment in signals or root
+                sentiment = api_response.get("sentiment")
+                if not sentiment and "extracted_context" in api_response:
+                    sentiment = api_response["extracted_context"].get("signals", {}).get("sentiment")
+                
+                if sentiment:
+                    return str(sentiment).lower()
+
+        # Fallback to mock implementation
         positive_words = ["thank", "great", "awesome", "love", "excellent", "happy"]
         negative_words = ["problem", "issue", "bad", "terrible", "angry", "frustrated"]
         
@@ -45,7 +200,30 @@ class AIService:
     
     async def detect_intent(self, content: str) -> Dict[str, Any]:
         """Detect the primary intent of the conversation with confidence"""
-        # Mock implementation
+        # Simple cleaning
+        cleaned_content = content
+        if "customer_id" in content and len(content.splitlines()) > 3:
+             cleaned_content = "\n".join(content.splitlines()[3:])
+
+        if self.use_real_llm:
+            payload = {
+                "customer_id": "analysis_only",
+                "channel": "internal",
+                "text": cleaned_content,
+                "task": "intent"
+            }
+            api_response = await self._call_llm_api(payload)
+            if api_response:
+                intent_data = api_response.get("intent")
+                if not intent_data and "extracted_context" in api_response:
+                    intent_val = api_response["extracted_context"].get("signals", {}).get("intent")
+                    if intent_val:
+                        intent_data = {"value": intent_val, "confidence": 0.9}
+                
+                if intent_data:
+                    return intent_data
+
+        # Fallback to mock implementation
         content_lower = content.lower()
         
         intent = "general"
@@ -70,14 +248,47 @@ class AIService:
         }
     
     async def transcribe_audio(self, audio_data: bytes, language: str = "en") -> Dict[str, Any]:
-        """Transcribe audio to text"""
-        # Mock implementation - replace with actual transcription service
-        return {
-            "transcript": "This is a mock transcription of the audio content.",
-            "confidence": 0.95,
-            "duration_seconds": 30.0,
-            "language": language
-        }
+        """Transcribe audio to text using external Whisper API"""
+        if not self.use_real_llm:
+            return {
+                "transcript": "Real LLM is disabled. This is a mock transcript.",
+                "confidence": 0.95,
+                "duration_seconds": 30.0,
+                "language": language
+            }
+
+        # The external API expects multipart/form-data
+        # We need a filename for the upload logic in some frameworks
+        files = {"file": ("audio_file.mp3", audio_data, "audio/mpeg")}
+        
+        # Build the transcribe URL by replacing /conversation with /transcribe
+        transcribe_url = self.api_url.replace("/conversation", "/transcribe")
+        
+        try:
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                logger.info(f"Calling transcription API at {transcribe_url}")
+                response = await client.post(transcribe_url, files=files)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    return {
+                        "transcript": result.get("transcript", ""),
+                        "confidence": result.get("confidence", 0.95),
+                        "duration_seconds": result.get("duration", result.get("duration_seconds", 0.0)),
+                        "language": result.get("language", language)
+                    }
+                else:
+                    logger.error(f"Transcription API Error: {response.status_code} - {response.text}")
+                    raise Exception(f"Transcription failed with status {response.status_code}")
+        except Exception as e:
+            logger.error(f"Failed to transcribe audio: {str(e)}", exc_info=True)
+            # Minimal fallback for stability
+            return {
+                "transcript": "[Transcription Error]",
+                "confidence": 0.0,
+                "duration_seconds": 0.0,
+                "language": language
+            }
     
     def _extract_topics(self, content: str) -> list:
         """Extract topics from content"""
@@ -97,85 +308,74 @@ class AIService:
                 topics.append(topic)
         return topics if topics else ["general"]
     
-    def _extract_entities(self, content: str) -> Dict[str, Dict[str, Any]]:
-        """Extract named entities from content with confidence"""
-        # Mock implementation
-        entities = {
-            "order_ids": {},
-            "product_names": {}, 
-            "dates": {},
-            "amounts": {},
-            # New demo fields
-            "preferences": {},
-            "budget": {}
+    
+    def _sanitize_context(self, context: Dict[str, Any], content: str = "") -> Dict[str, Any]:
+        """
+        Sanitize extracted context to remove known hallucinations unless supported by content.
+        implements 'Smart Relevance Check'.
+        """
+        # Map fields to required keywords. If field is present, one of the keywords MUST be in the text.
+        param_requirements = {
+            "vehicle_type": ["car", "vehicle", "truck", "bike", "scooter", "suv", "sedan", "hatchback", "auto"],
+            "fuel_type": ["fuel", "petrol", "diesel", "electric", "hybrid", "gas", "ev"],
+            "mileage": ["mileage", "km/l", "efficiency", "range", "km", "miles"],
+            "seating_capacity": ["seat", "passenger", "people", "calapcity", "seater"],
+            "transmission": ["manual", "automatic", "gear", "transmission", "clutch"],
+            "car_color": ["color", "red", "black", "white", "blue", "paint"], # Be careful with generic 'color'
         }
         
+        content_lower = content.lower() if content else ""
+        
+        # 1. Sanitize preferences
+        if "preferences" in context:
+            clean_prefs = []
+            for pref in context["preferences"]:
+                cat = pref.get("category", "").lower().strip()
+                val = pref.get("value", "")
+                
+                # Check if this category has specific requirements
+                if cat in param_requirements:
+                    required_keywords = param_requirements[cat]
+                    # Check if any keyword matches
+                    is_valid = any(kw in content_lower for kw in required_keywords)
+                    
+                    if not is_valid:
+                        # HEURISTIC: Remap known confusions
+                        if cat == "seating_capacity" and ("hour" in str(val) or "week" in str(val)):
+                            logger.warning(f"SmartSanitizer: Remapping '{cat}'='{val}' to 'commitment' (Time detected)")
+                            pref["category"] = "commitment"
+                            clean_prefs.append(pref)
+                        else:
+                            logger.warning(f"SmartSanitizer: Dropping '{cat}'='{val}' - No supporting keywords found in text.")
+                        continue
+                    
+                clean_prefs.append(pref)
+            context["preferences"] = clean_prefs
+            
+        return context
+
+    def _extract_entities(self, content: str) -> Dict[str, Dict[str, Any]]:
+        """Extract named entities from content with confidence"""
+        # Mock implementation - Generic fallback only.
+        # In a real scenario without the LLM, we can't reliably do this dynamically.
+        # We will return a basic structure.
+        
+        entities = {}
         content_lower = content.lower()
         
-        if "no callback" in content_lower:
-             entities["follow_up_time"] = {"value": "cancelled", "confidence": 0.95}
-        elif "saturday morning" in content_lower:
-             entities["follow_up_time"] = {"value": "Saturday morning", "confidence": 0.95}
+        # Simple rule-based extraction for demonstration if LLM is off
+        # but WITHOUT specific domain assumptions
+        import re
+        
+        # Extract potential amounts (generic)
+        amounts = re.findall(r'[\$£€₹]\s?(\d+(?:,\d+)*(?:\.\d{2})?)', content)
+        if amounts:
+             entities["mentioned_amounts"] = {"value": amounts, "confidence": 0.7}
 
-        if "9 lakhs" in content_lower and "firm upper limit" in content_lower:
-             entities["budget_max"] = {"value": "900000", "confidence": 0.95}
-
-        if "petrol only" in content_lower or "stick to petrol" in content_lower:
-             entities["fuel_type"] = {"value": "petrol", "confidence": 0.95}
-        elif "hybrid" in content_lower:
-             entities["fuel_type"] = {"value": "hybrid", "confidence": 0.9}
-
-        if "open to manual" in content_lower or "manual or automatic" in content_lower:
-             entities["transmission"] = {"value": "manual_or_automatic", "confidence": 0.9}
-        elif "automatic" in content_lower:
-             entities["transmission"] = {"value": "automatic", "confidence": 0.95}
-
-        if "highway driving can become" in content_lower or "highway driving could become" in content_lower:
-             entities["usage_type"] = {"value": "highway_and_city", "confidence": 0.9}
-        elif "30 kilometers" in content_lower:
-             entities["usage_type"] = {"value": "city_commute", "confidence": 0.9}
-
-        if "4 or 5 years" in content_lower:
-             entities["ownership_horizon"] = {"value": "4-5 years", "confidence": 0.9}
-
-        if "1-2 months" in content_lower:
-             entities["timeline"] = {"value": "1-2 months", "confidence": 0.9}
-
-        if "brand preference is now flexible" in content_lower or "not limited to toyota or honda" in content_lower:
-             entities["car_brands"] = {"value": "flexible", "confidence": 0.9}
-        elif "toyota" in content_lower or "honda" in content_lower:
-            brands = []
-            if "toyota" in content_lower: brands.append("Toyota")
-            if "honda" in content_lower: brands.append("Honda")
-            entities["car_brands"] = {"value": brands, "confidence": 0.9}
-
-        if "airbags" in content_lower or "crash ratings" in content_lower:
-             entities["safety_features"] = {"value": ["dual airbags", "ABS", "good crash ratings"], "confidence": 0.95}
-
-        # Mock extraction for car scenario
-        if "hatchback" in content_lower:
-             entities["car_type"] = {"value": "hatchback", "confidence": 0.9}
-        elif "compact car" in content_lower:
-             entities["car_type"] = {"value": "compact", "confidence": 0.85}
-        elif "suv" in content_lower and "leaning towards" in content_lower:
-             if "compact" not in content_lower:
-                 entities["car_type"] = {"value": "suv", "confidence": 0.8}
-            
-        if "black" in content_lower:
-            entities["car_color"] = {"value": "black", "confidence": 0.95}
-            
-        if "12 lakhs" in content_lower and "initial" in content_lower:
-            entities["budget_initial"] = {"value": "1200000", "confidence": 0.9}
-        elif "8 lakhs" in content_lower:
-            entities["budget_initial"] = {"value": "800000", "confidence": 0.9}
-        elif "10 lakhs" in content_lower:
-             entities["budget_initial"] = {"value": "1000000", "confidence": 0.9}
-            
-        if "13" in content_lower and "14" in content_lower and "stretch" in content_lower:
-             entities["budget_max"] = {"value": "1400000", "confidence": 0.85}
-        elif "15" in content_lower and "17" in content_lower and "extend" in content_lower:
-             entities["budget_max"] = {"value": "1700000", "confidence": 0.85}
-             
+        # Extract potential dates/times (very basic)
+        if "tomorrow" in content_lower:
+             entities["relative_time"] = {"value": "tomorrow", "confidence": 0.8}
+        
         return entities
     
     def _extract_action_items(self, content: str) -> list:
@@ -190,35 +390,47 @@ class AIService:
         return questions
     
     async def generate_interaction_summary(self, content: str, intent: Dict[str, Any], extracted_context: Dict[str, Any]) -> str:
-        """Generate a brief summary of the current interaction"""
-        # Mock implementation - in production, use LLM
+        """Generate a brief summary of the current interaction using real LLM if available"""
+        if self.use_real_llm:
+            # Simple cleaning
+            cleaned_content = content
+            if "customer_id" in content and len(content.splitlines()) > 3:
+                cleaned_content = "\n".join(content.splitlines()[3:])
+
+            payload = {
+                "customer_id": "summary_only",
+                "channel": "internal",
+                "text": cleaned_content,
+                "task": "summary" # Attempt to use summary task
+            }
+            api_response = await self._call_summary_api(payload)
+            if api_response and "summary" in api_response:
+                return api_response["summary"]
+
+        if self.use_real_llm:
+            # ... (previous real LLM logic)
+            pass
+
+        # Improved fallback logic
         intent_value = intent.get("value", "general") if isinstance(intent, dict) else intent
-        topics = extracted_context.get("topics", {})
-        topic_list = list(topics.keys()) if isinstance(topics, dict) else topics
+        summary = f"Interaction regarding {intent_value.replace('_', ' ')}."
         
-        summary = f"Customer contacted regarding {intent_value}"
-        if topic_list:
-            summary += f" related to {', '.join(topic_list[:2])}"
-            
-        # Add entity details to summary for better context
         entities = extracted_context.get("entities", {})
-        details = []
+        impactful_details = []
         
-        # Check for car specific entities
-        if "car_type" in entities:
-             details.append(f"type: {entities['car_type'].get('value')}")
-        if "car_color" in entities:
-             details.append(f"color: {entities['car_color'].get('value')}")
-        if "car_brands" in entities:
-             brands = entities['car_brands'].get('value')
-             if isinstance(brands, list):
-                 details.append(f"brands: {', '.join(brands)}")
-        if "budget_initial" in entities:
-             details.append(f"budget: {entities['budget_initial'].get('value')}")
-             
-        if details:
-            summary += f". Details: {', '.join(details)}."
+        # Extract meaningful details from entities for mock summary
+        for key, info in entities.items():
+            val = info.get("value") if isinstance(info, dict) else info
+            if val and key not in ["customer_id", "intent"]:
+                impactful_details.append(f"{key.replace('_', ' ')}: {val}")
         
+        if impactful_details:
+            summary += f" Key details: {', '.join(impactful_details)}."
+        else:
+            # Try to extract something from contents
+            if "budget" in content.lower(): summary += " Budget was discussed."
+            if "timeline" in content.lower(): summary += " Timeline was discussed."
+            
         return summary
     
     async def update_unified_summary(
@@ -228,67 +440,88 @@ class AIService:
         final_backend_state: Dict[str, Any] = None,
         open_tasks: list = None,
         pending_issues: list = None
-    ) -> str:
+    ) -> Dict[str, Any]:
         """
-        Update unified summary incrementally without rebuilding from scratch.
-        
-        CRITICAL: This is called AFTER the graph engine has finalized the backend state.
-        The LLM uses the verified backend state to generate the summary.
-        
-        Mock implementation - in production, this would use an LLM with a prompt like:
-        
-        You are updating a customer's unified summary.
-        
-        EXISTING SUMMARY:
-        {existing_summary}
-        
-        LATEST INTERACTION:
-        {new_interaction_summary}
-        
-        CURRENT VERIFIED STATE (from backend graph engine):
-        - Intent: {final_backend_state.context.intent}
-        - Entities: {final_backend_state.context.entities}
-        - Topics: {final_backend_state.context.topics}
-        
-        CURRENT CONTEXT:
-        - Open Tasks: {open_tasks}
-        - Pending Issues: {pending_issues}
-        
-        Update the summary to:
-        1. Preserve valid historical context
-        2. Reflect the latest verified truth from backend
-        3. Update changed preferences/requirements
-        4. Avoid duplication
-        5. Keep it concise (2-3 sentences)
-        6. Never hallucinate missing facts
+        Update unified summary incrementally using real LLM if available.
+        Returns a dict: {'summary': str, 'questions': List[str], 'recommendations': List[Dict]}
         """
         
-        # Mock implementation
-        if not existing_summary:
-            # First interaction - create initial summary
-            summary = new_interaction_summary
-        else:
-            # Merge with existing
-            summary = f"{existing_summary} {new_interaction_summary}"
+        # Default fallback structure (Simulate diverse "database" of questions)
+        result = {
+            "summary": f"{existing_summary} {new_interaction_summary}".strip(),
+            "questions": [
+                "Does the customer have any timeline constraints?",
+                "Are there any specific budget preferences we missed?",
+                "Is there anything else I can help you with?",
+                "Would you like to schedule a follow-up?"
+            ],
+            "recommendations": [
+                {"category": "engagement", "recommendation": "Verify customer satisfaction before closing", "confidence": 0.85, "reason": "Standard procedure"},
+                {"category": "upsell", "recommendation": "Check for available upgrades", "confidence": 0.60, "reason": "Potential interest based on profile"}
+            ]
+        }
+        
+        # If open tasks/issues exist, tailor the defaults
+        if pending_issues:
+             result["questions"] = [
+                 f"Can you provide more details about the {pending_issues[0].get('description', 'issue')}?",
+                 "Has the previous issue been resolved to your satisfaction?",
+                 "Is there urgency around this request?"
+             ]
+             result["recommendations"].append({
+                 "category": "support", 
+                 "recommendation": "Prioritize resolving open issue", 
+                 "confidence": 0.95, 
+                 "reason": "Active issue detected"
+             })
+
+        if self.use_real_llm:
+            combined_context = f"EXISTING SUMMARY: {existing_summary}\n\nNEW INTERACTION: {new_interaction_summary}"
+            if final_backend_state:
+                combined_context += f"\n\nCURRENT PROFILE STATE: {json.dumps(final_backend_state)}"
+
+            payload = {
+                "customer_id": "summary_and_planning",
+                "channel": "internal",
+                "text": combined_context,
+                "task": "summary",
+                "context": (
+                    "1. Update the EXISTING SUMMARY into a single, cohesive customer narrative.\n"
+                    "2. Generate 3 specific follow-up questions for the agent to ask.\n"
+                    "3. Generate 1-2 strategic recommendations (next best actions) with confidence score (0-1)."
+                )
+            }
+            api_response = await self._call_summary_api(payload)
             
-            # Simple deduplication (in production, LLM would handle this intelligently)
-            if len(summary) > 200:
-                summary = summary[:200] + "..."
+            if api_response:
+                # LLM response handling - expecting structured output or we parse it
+                # Assuming the external API returns 'summary', 'questions', 'recommendations' 
+                # or we extract them from 'extracted_context' if the prompt was complex
+                
+                # Check for direct fields
+                if "summary" in api_response:
+                    result["summary"] = api_response["summary"]
+                
+                # Extract questions/recommendations from potential extended fields or context
+                # If API supports custom structured output, great. If not, fallback to parsing or separate calls.
+                # For this implementation, we assume the API returns them or we use simple heuristics
+                
+                if "questions" in api_response:
+                    result["questions"] = api_response["questions"]
+                
+                if "recommendations" in api_response:
+                    result["recommendations"] = api_response["recommendations"]
+                
+                return result
+
+        # Generic merge/improvement fallback logic
+        if not existing_summary or "None." in existing_summary or "Interaction regarding inquiry." in existing_summary:
+             result["summary"] = new_interaction_summary
+        elif new_interaction_summary not in existing_summary:
+             # Intelligent appending - avoid exact duplication
+             result["summary"] = f"{existing_summary} Further interaction: {new_interaction_summary}"
         
-        # Add context about verified state (mock - in production, LLM would incorporate this naturally)
-        if final_backend_state:
-            intent = final_backend_state.get("context", {}).get("intent", {})
-            if isinstance(intent, dict) and intent.get("confirmed"):
-                intent_value = intent.get("value")
-                if intent_value:
-                    # In production, LLM would naturally incorporate this
-                    pass  # Mock: already in summary
-        
-        # Add context about open items
-        if pending_issues and len(pending_issues) > 0:
-            summary += f" Awaiting resolution on {len(pending_issues)} issue(s)."
-        
-        return summary
+        return result
 
 
 ai_service = AIService()
